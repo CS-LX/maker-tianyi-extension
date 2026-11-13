@@ -1,0 +1,25 @@
+{
+  "name": "maker-tianyi-extension",
+  "private": true,
+  "description": "TapTap Maker chat identity customization extension",
+  "author": "Linxium (CS-LX)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CS-LX/maker-tianyi-extension.git"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "scripts": {
+    "check": "node --check content.js && node scripts/check.mjs",
+    "test": "node --test",
+    "build": "node scripts/build.mjs",
+    "version:set": "node scripts/set-version.mjs"
+  },
+  "devDependencies": {
+    "fflate": "0.8.3",
+    "jsdom": "31.0.1",
+    "yaml": "2.9.1"
+  }
+}

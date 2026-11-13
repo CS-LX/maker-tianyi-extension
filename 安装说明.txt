@@ -1,0 +1,40 @@
+Maker · 天一一（Chrome / Edge 扩展）
+
+安装
+1. 将 ZIP 完整解压到一个准备长期保留的目录；也可以直接使用提供的扩展文件夹。
+2. Chrome 地址栏输入 chrome://extensions，Edge 输入 edge://extensions。
+3. 打开“开发者模式”，点击“加载已解压的扩展程序”。
+4. 选择解压后包含 manifest.json 的文件夹。
+5. 刷新已经打开的 Maker 页面。之后打开其他 Maker 页面也会自动生效。
+
+效果
+- https://maker.taptap.cn/ 下所有页面的聊天 Bot Avatar 使用天一一头像。
+- “嗒啦啦正在执行命令...”等状态显示为“天一一正在执行命令...”。
+- 兼容已确认的折叠聊天行、运行中状态行，以及头像旁的独立姓名标签。
+- 保留头像原来的圆形裁切、尺寸和进度外圈。
+- 新消息、状态更新和页面内会话切换时自动处理。
+- 仅修改本机页面显示；扩展没有网络请求、统计、Cookie 或存储功能。
+- 不替换聊天正文、代码示例、输入框或用户头像。
+
+头像
+assets/tianyi.jpg 已包含默认头像，安装后无需配置本机文件路径。
+以后要换头像，替换扩展里的 JPG，
+然后在扩展管理页点击“重新加载”，再刷新 Maker 页面即可。
+
+停用
+在扩展管理页关闭或移除此扩展，再刷新 Maker 页面，即可恢复原样。
+加载后的扩展文件夹必须保留，不要删除或移动。
+
+适配范围
+基于 2026-11-13 提供的页面结构：
+img[alt="Bot Avatar"]、.chat-thinking-shimmer、.chat-collapsed-row。
+若 Maker 将来修改这些标记，需要相应更新 content.js。
+本扩展不改变服务端名称、模型身份或聊天记录。
+
+Chrome 官方加载说明：
+https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked
+
+项目主页：https://github.com/CS-LX/maker-tianyi-extension
+发行下载：https://github.com/CS-LX/maker-tianyi-extension/releases
+作者：Linxium (CS-LX)
+许可证：MIT，见 LICENSE。
