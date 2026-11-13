@@ -1,0 +1,129 @@
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { chromium } from 'playwright';
+import { root } from './project.mjs';
+
+const profileDir = await mkdtemp(path.join(os.tmpdir(), 'maker-tianyi-browser-'));
+const context = await chromium.launchPersistentContext(profileDir, {
+  channel: 'chromium', headless: true, viewport: { width: 368, height: 640 },
+  ignoreDefaultArgs: ['--disable-extensions'],
+  args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`]
+});
+context.setDefaultTimeout(15000);
+let passed = 0;
+const pass = label => { passed++; console.log(`PASS ${label}`); };
+const errors = [];
+context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
+try {
+  const jpg = await readFile(path.join(root, 'assets/tianyi.jpg'));
+  const fixture = '<!doctype html><html><body><div class="flex items-center"><div class="relative flex items-center"><img alt="Bot Avatar" src="/assets/tap-test.webp"><svg id="ring"></svg></div><div class="chat-thinking-shimmer">嗒啦啦正在思考...</div></div><p id="prose">正文提到嗒啦啦</p></body></html>';
+  await context.route('https://maker.taptap.cn/**', route => {
+    if (new URL(route.request().url()).pathname.startsWith('/assets/')) return route.fulfill({ contentType: 'image/jpeg', body: jpg });
+    return route.fulfill({ contentType: 'text/html', body: fixture });
+  });
+  const maker = await context.newPage();
+  const cdp = await context.newCDPSession(maker);
+  const worlds = new Map();
+  cdp.on('Runtime.executionContextCreated', ({ context }) => worlds.set(context.id, context));
+  cdp.on('Runtime.executionContextDestroyed', ({ executionContextId }) => worlds.delete(executionContextId));
+  await cdp.send('Runtime.enable');
+  await maker.goto('https://maker.taptap.cn/app/browser-test');
+  await maker.waitForFunction(() => document.querySelector('.chat-thinking-shimmer').textContent === '天一一正在思考...');
+  let extensionId;
+  for (const world of worlds.values()) {
+    try {
+      const { result } = await cdp.send('Runtime.evaluate', { expression: 'globalThis.chrome?.runtime?.id', contextId: world.id, returnByValue: true });
+      if (typeof result.value === 'string') extensionId = result.value;
+    } catch { /* A navigation may have discarded a main-world context. */ }
+  }
+  assert.match(extensionId ?? '', /^[a-p]{32}$/);
+  const popupUrl = `chrome-extension://${extensionId}/popup.html`;
+  const popup = await context.newPage();
+  await popup.goto(popupUrl);
+  await popup.waitForFunction(() => !document.querySelector('#nickname').disabled);
+  assert.equal(await popup.locator('#nickname').inputValue(), '天一一');
+  assert.equal(await popup.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  pass('extension loads, default settings render, popup fits its viewport');
+
+  const nickname = '<b>小林 $&🙂</b>';
+  await popup.locator('#nickname').fill(nickname);
+  await popup.locator('#save').click();
+  await popup.waitForFunction(() => document.querySelector('#status').dataset.kind === 'success');
+  await maker.waitForFunction(name => document.querySelector('.chat-thinking-shimmer').textContent === name + '正在思考...', nickname);
+  assert.equal(await maker.locator('.chat-thinking-shimmer b').count(), 0);
+  assert.equal(await maker.locator('#prose').textContent(), '正文提到嗒啦啦');
+  pass('literal nickname persists and updates the already-open chat');
+
+  const png = await readFile(path.join(root, 'assets/icons/icon128.png'));
+  const ico = Buffer.alloc(22 + png.length);
+  ico.writeUInt16LE(1, 2); ico.writeUInt16LE(1, 4); ico[6] = ico[7] = 128;
+  ico.writeUInt16LE(1, 10); ico.writeUInt16LE(32, 12); ico.writeUInt32LE(png.length, 14); ico.writeUInt32LE(22, 18); png.copy(ico, 22);
+  const bmp = Buffer.alloc(70);
+  bmp.write('BM'); bmp.writeUInt32LE(70, 2); bmp.writeUInt32LE(54, 10); bmp.writeUInt32LE(40, 14);
+  bmp.writeInt32LE(2, 18); bmp.writeInt32LE(2, 22); bmp.writeUInt16LE(1, 26); bmp.writeUInt16LE(24, 28); bmp.fill(180, 54);
+  const webp = await popup.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 4; c.getContext('2d').fillRect(0, 0, 4, 4); return c.toDataURL('image/webp').split(',')[1]; });
+  const images = [
+    { name: 'avatar.jpg', mimeType: 'image/jpeg', buffer: jpg },
+    { name: 'avatar.png', mimeType: 'image/png', buffer: png },
+    { name: 'avatar.webp', mimeType: 'image/webp', buffer: Buffer.from(webp, 'base64') },
+    { name: 'avatar.gif', mimeType: 'image/gif', buffer: Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64') },
+    { name: 'avatar.avif', mimeType: 'image/avif', buffer: await readFile(path.join(root, 'tests/fixtures/avatar.avif')) },
+    { name: 'avatar.bmp', mimeType: 'image/bmp', buffer: bmp },
+    { name: 'avatar.ico', mimeType: 'image/x-icon', buffer: ico },
+    { name: 'avatar.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><script>globalThis.compromised=true</script><rect width="80" height="40" fill="#5ed9b9"/></svg>') }
+  ];
+  for (const image of images) {
+    await popup.locator('#avatar-file').setInputFiles(image);
+    await popup.waitForFunction(() => /图片已准备好/.test(document.querySelector('#status').textContent));
+    const dimensions = await popup.locator('#preview-avatar').evaluate(async image => { await image.decode(); return [image.naturalWidth, image.naturalHeight]; });
+    assert.equal(dimensions[0], dimensions[1]);
+    assert.ok(dimensions[0] <= 512);
+    assert.match(await popup.locator('#preview-avatar').getAttribute('src'), /^data:image\/png;base64,/);
+    pass(`real decoder imports ${image.name.split('.').pop().toUpperCase()}`);
+  }
+  assert.equal(await popup.evaluate(() => globalThis.compromised), undefined);
+  const customAvatar = await popup.locator('#preview-avatar').getAttribute('src');
+  await popup.locator('#save').click();
+  await popup.waitForFunction(() => document.querySelector('#status').dataset.kind === 'success');
+  await maker.waitForFunction(src => document.querySelector('[alt="Bot Avatar"]').getAttribute('src') === src, customAvatar);
+  assert.equal(await maker.locator('[alt="Bot Avatar"]').evaluate(async img => { await img.decode(); return img.naturalWidth > 0; }), true);
+  await popup.reload();
+  await popup.waitForFunction(() => !document.querySelector('#nickname').disabled);
+  assert.equal(await popup.locator('#nickname').inputValue(), nickname);
+  assert.equal(await popup.locator('#preview-avatar').getAttribute('src'), customAvatar);
+  const secondMaker = await context.newPage();
+  await secondMaker.goto('https://maker.taptap.cn/app/second-conversation');
+  await secondMaker.waitForFunction(name => document.querySelector('.chat-thinking-shimmer').textContent === name + '正在思考...', nickname);
+  pass('custom PNG displays in live chat and survives reopening settings and a new tab');
+
+  await popup.locator('#avatar-file').setInputFiles({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('not an image') });
+  await popup.waitForFunction(() => document.querySelector('#status').dataset.kind === 'error');
+  assert.equal(await popup.locator('#preview-avatar').getAttribute('src'), customAvatar);
+  await popup.locator('#avatar-file').setInputFiles({ name: 'oversize.png', mimeType: 'image/png', buffer: Buffer.alloc(10 * 1024 * 1024 + 1) });
+  await popup.waitForFunction(() => /不能超过 10 MB/.test(document.querySelector('#status').textContent));
+  assert.equal(await popup.locator('#preview-avatar').getAttribute('src'), customAvatar);
+  await popup.locator('#avatar-file').setInputFiles({ name: 'huge.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="20000" height="20000"/>') });
+  await popup.waitForFunction(() => /图片尺寸过大/.test(document.querySelector('#status').textContent));
+  assert.equal(await popup.locator('#preview-avatar').getAttribute('src'), customAvatar);
+  pass('corrupt, oversized, and excessive-dimension files retain the previous avatar');
+
+  await popup.locator('#reset').click();
+  await popup.locator('#save').click();
+  await popup.waitForFunction(() => document.querySelector('#status').dataset.kind === 'success');
+  for (const page of [maker, secondMaker]) await page.waitForFunction(() => document.querySelector('.chat-thinking-shimmer').textContent === '天一一正在思考...');
+  assert.equal(await popup.locator('#preview-avatar').getAttribute('src'), `chrome-extension://${extensionId}/assets/tianyi.jpg`);
+  pass('restoring defaults updates every open Maker tab');
+  await mkdir(path.join(root, 'test-results'), { recursive: true });
+  await popup.screenshot({ path: path.join(root, 'test-results/settings.png'), fullPage: true });
+  assert.deepEqual(errors, []);
+  console.log(`Browser smoke: ${passed} checks passed.`);
+} finally {
+  await context.close();
+  // Only the freshly-created, isolated test profile is removed; no user's browser is involved.
+  const resolved = path.resolve(profileDir);
+  if (path.dirname(resolved) === path.resolve(os.tmpdir()) && path.basename(resolved).startsWith('maker-tianyi-browser-')) {
+    await rm(resolved, { recursive: true, force: true, maxRetries: 3 });
+  }
+}

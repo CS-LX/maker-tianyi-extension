@@ -38,6 +38,10 @@ jobs:
         run: npm run check -- --tag "$RELEASE_TAG"
       - name: Run tests
         run: npm test
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium --no-shell
+      - name: Test loaded extension in Chromium
+        run: npm run test:browser
       - name: Build extension ZIP
         run: npm run build
       - name: Publish GitHub Release

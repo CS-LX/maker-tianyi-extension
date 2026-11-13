@@ -1,115 +1,132 @@
 (() => {
-  "use strict";
-
-  const ORIGINAL_NAME = "嗒啦啦";
-  const DISPLAY_NAME = "天一一";
-  const AVATAR_URL = chrome.runtime.getURL("assets/tianyi.jpg");
+  'use strict';
+  const P = MakerProfile;
+  const ORIGINAL_NAME = '嗒啦啦';
+  const DEFAULT_AVATAR = chrome.runtime.getURL('assets/tianyi.jpg');
   const AVATAR_SELECTOR = 'img[alt="Bot Avatar"]';
-  const STATUS_SELECTOR = ".chat-thinking-shimmer";
-  const IDENTITY_ROW_SELECTOR = ".chat-collapsed-row, .flex.items-center";
+  const STATUS_SELECTOR = '.chat-thinking-shimmer';
+  const ROW_SELECTOR = '.chat-collapsed-row, .flex.items-center';
   const EXCLUDED_SELECTOR = [
-    "script", "style", "noscript", "template", "textarea", "input",
-    "select", "option", "pre", "code", '[role="textbox"]',
+    'script', 'style', 'noscript', 'template', 'textarea', 'input', 'select',
+    'option', 'pre', 'code', '[role="textbox"]',
     '[contenteditable]:not([contenteditable="false"])',
-    ".prose", ".markdown", ".markdown-body", ".markdown-content"
-  ].join(",");
-
-  const originals = new WeakMap();
-  const pending = new Set();
+    '.prose', '.markdown', '.markdown-body', '.markdown-content'
+  ].join(',');
+  let profile = { ...P.DEFAULTS }, settingsRevision = 0;
+  const avatars = new WeakMap(), texts = new WeakMap();
+  const liveAvatars = new Set(), liveTexts = new Set(), pending = new Set();
   let scheduled = false;
+  const excluded = element => Boolean(element?.closest(EXCLUDED_SELECTOR));
 
-  function isExcluded(element) {
-    return Boolean(element?.closest(EXCLUDED_SELECTOR));
+  function restoreText(text) {
+    const record = texts.get(text);
+    if (record && text.nodeValue === record.rendered) text.nodeValue = record.original;
+    texts.delete(text);
+    liveTexts.delete(text);
   }
-
-  function patchAvatar(image) {
-    if (!image.matches(AVATAR_SELECTOR) || isExcluded(image)) {
-      // A virtualized chat can reuse a former bot image for another speaker.
-      const original = originals.get(image);
-      if (original) {
-        if (image.getAttribute("src") === AVATAR_URL) {
-          if (original.src === null) image.removeAttribute("src");
-          else image.setAttribute("src", original.src);
-          if (!image.hasAttribute("srcset") && original.srcset !== null) {
-            image.setAttribute("srcset", original.srcset);
-          }
-        }
-        originals.delete(image);
+  function restoreAvatar(image) {
+    const record = avatars.get(image);
+    if (record) {
+      if (image.getAttribute('src') === record.applied) {
+        if (record.src === null) image.removeAttribute('src');
+        else image.setAttribute('src', record.src);
+        if (!image.hasAttribute('srcset') && record.srcset !== null) image.setAttribute('srcset', record.srcset);
       }
-      return;
+      image.removeEventListener('error', record.onError);
+      avatars.delete(image);
     }
-
-    const src = image.getAttribute("src");
-    const srcset = image.getAttribute("srcset");
-    const original = originals.get(image) ?? { src, srcset };
-    if (src !== AVATAR_URL) original.src = src;
-    if (srcset !== null) original.srcset = srcset;
-    originals.set(image, original);
-
-    if (src !== AVATAR_URL) image.setAttribute("src", AVATAR_URL);
-    if (srcset !== null) image.removeAttribute("srcset");
-    // Keep classes, alt, size, and the sibling SVG progress ring untouched.
-    // A name can already exist when its avatar is mounted into a child wrapper.
-    for (let row = image.parentElement, depth = 0; row && depth < 3;
-         row = row.parentElement, depth++) {
-      if (!row.matches(IDENTITY_ROW_SELECTOR) || row.textContent.length >= 200) continue;
-      const labels = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
-      while (labels.nextNode()) patchText(labels.currentNode);
-    }
+    liveAvatars.delete(image);
+  }
+  function restoreSubtree(root) {
+    for (const text of liveTexts) if (root.contains(text)) restoreText(text);
+    for (const image of liveAvatars) if (root.contains(image)) restoreAvatar(image);
   }
 
-  function isNameLabel(text) {
-    if (text.nodeValue.trim() !== ORIGINAL_NAME) return false;
-    let element = text.parentElement;
-    for (let depth = 0; element && depth < 3; depth++, element = element.parentElement) {
-      if (element.matches(IDENTITY_ROW_SELECTOR) &&
-          element.textContent.length < 200 &&
-          element.querySelector(AVATAR_SELECTOR)) return true;
+  function isNameLabel(text, original) {
+    if (original.trim() !== ORIGINAL_NAME) return false;
+    for (let element = text.parentElement, depth = 0; element && depth < 3; element = element.parentElement, depth++) {
+      if (element.matches(ROW_SELECTOR) && element.textContent.length < 240 && element.querySelector(AVATAR_SELECTOR)) return true;
     }
     return false;
   }
-
   function patchText(text) {
-    const value = text.nodeValue;
-    if (!value?.includes(ORIGINAL_NAME)) return;
+    const current = text.nodeValue;
+    let record = texts.get(text);
+    // Only reuse provenance while the page still contains our last rendered value.
+    const original = record && current === record.rendered ? record.original : current;
     const parent = text.parentElement;
-    if (!parent || isExcluded(parent)) return;
-    // Replace identity/status UI only, preserving chat prose and code examples.
-    if (parent.closest(STATUS_SELECTOR) || isNameLabel(text)) {
-      text.nodeValue = value.replaceAll(ORIGINAL_NAME, DISPLAY_NAME);
+    if (!original?.includes(ORIGINAL_NAME) || !parent || excluded(parent) ||
+        !(parent.closest(STATUS_SELECTOR) || isNameLabel(text, original))) {
+      restoreText(text);
+      return;
+    }
+    record = { original, rendered: original.split(ORIGINAL_NAME).join(profile.nickname) };
+    texts.set(text, record);
+    liveTexts.add(text);
+    if (current !== record.rendered) text.nodeValue = record.rendered;
+  }
+
+  function patchAvatar(image) {
+    if (!image.matches(AVATAR_SELECTOR) || excluded(image)) { restoreAvatar(image); return; }
+    const current = image.getAttribute('src');
+    const srcset = image.getAttribute('srcset');
+    let record = avatars.get(image);
+    if (!record) {
+      record = { src: current, srcset, applied: null, requested: null, failed: 0 };
+      record.onError = () => {
+        if (!image.isConnected || image.getAttribute('src') !== record.applied || record.failed >= 2) return;
+        // Invalid saved images or a restrictive site CSP get a bounded fallback, never a retry loop.
+        record.failed = record.failed === 0 && profile.avatar ? 1 : 2;
+        patchAvatar(image);
+      };
+      image.addEventListener('error', record.onError);
+      avatars.set(image, record);
+    }
+    if (current !== record.applied) record.src = current;
+    if (srcset !== null) record.srcset = srcset;
+    const requested = profile.avatar || DEFAULT_AVATAR;
+    if (record.requested !== requested) { record.requested = requested; record.failed = 0; }
+    const target = record.failed >= 2 ? (record.src || DEFAULT_AVATAR) : record.failed === 1 ? DEFAULT_AVATAR : requested;
+    record.applied = target;
+    liveAvatars.add(image);
+    if (current !== target) image.setAttribute('src', target);
+    if (srcset !== null && record.failed < 2) image.removeAttribute('srcset');
+    // Include an existing sibling name when an avatar is mounted later.
+    for (let row = image.parentElement, depth = 0; row && depth < 3; row = row.parentElement, depth++) {
+      if (!row.matches(ROW_SELECTOR) || row.textContent.length >= 240) continue;
+      const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) patchText(walker.currentNode);
     }
   }
 
   function scan(root) {
     if (!root.isConnected) return;
-    if (root.nodeType === Node.TEXT_NODE) {
-      patchText(root);
-      return;
-    }
+    if (root.nodeType === Node.TEXT_NODE) { patchText(root); return; }
     if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_NODE) return;
     if (root.nodeType === Node.ELEMENT_NODE) {
-      if (root.matches("img")) patchAvatar(root);
-      if (isExcluded(root)) return;
+      if (excluded(root)) { restoreSubtree(root); return; }
+      if (root.matches('img')) patchAvatar(root);
     }
-
-    const walker = document.createTreeWalker(
-      root,
-      NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
-      {
-        acceptNode(node) {
-          return node.nodeType === Node.ELEMENT_NODE && node.matches(EXCLUDED_SELECTOR)
-            ? NodeFilter.FILTER_REJECT
-            : NodeFilter.FILTER_ACCEPT;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (node.nodeType === Node.ELEMENT_NODE && node.matches(EXCLUDED_SELECTOR)) {
+          restoreSubtree(node);
+          return NodeFilter.FILTER_REJECT;
         }
+        return NodeFilter.FILTER_ACCEPT;
       }
-    );
+    });
     while (walker.nextNode()) {
       const node = walker.currentNode;
       if (node.nodeType === Node.TEXT_NODE) patchText(node);
-      else if (node.matches("img")) patchAvatar(node);
+      else if (node.matches('img')) patchAvatar(node);
     }
   }
-
+  function pruneDetached() {
+    // WeakMap provenance survives detach/reinsert without retaining removed conversation trees.
+    for (const text of liveTexts) if (!text.isConnected) liveTexts.delete(text);
+    for (const image of liveAvatars) if (!image.isConnected) liveAvatars.delete(image);
+  }
   function enqueue(node) {
     pending.add(node);
     if (scheduled) return;
@@ -119,41 +136,54 @@
       const roots = new Set(pending);
       pending.clear();
       for (const root of roots) {
-        // If an ancestor is already queued, its walk includes this subtree.
         let covered = false;
         for (let parent = root.parentNode; parent; parent = parent.parentNode) {
           if (roots.has(parent)) { covered = true; break; }
         }
         if (!covered) scan(root);
       }
+      pruneDetached();
     });
   }
-
   const observer = new MutationObserver(records => {
+    let removed = false;
     for (const record of records) {
-      if (record.type === "characterData") {
-        if (record.target.nodeValue?.includes(ORIGINAL_NAME)) enqueue(record.target);
-      } else if (record.type === "attributes") {
-        const target = record.target;
-        if (target.matches("img") || target.matches(STATUS_SELECTOR) ||
-            target.matches(IDENTITY_ROW_SELECTOR)) enqueue(target);
+      if (record.type === 'characterData') {
+        if (texts.has(record.target) || record.target.nodeValue?.includes(ORIGINAL_NAME)) enqueue(record.target);
+      } else if (record.type === 'attributes') {
+        // Attribute changes stay scoped to the changed subtree, including role reuse and excluded editors.
+        enqueue(record.target);
       } else {
         for (const node of record.addedNodes) enqueue(node);
-        // Also cover an existing name label when its avatar arrives later.
-        if (record.target.nodeType === Node.ELEMENT_NODE &&
-            record.target.matches(`${STATUS_SELECTOR}, ${IDENTITY_ROW_SELECTOR}`)) {
-          enqueue(record.target);
-        }
+        if (record.target.nodeType === Node.ELEMENT_NODE && record.target.matches(`${STATUS_SELECTOR}, ${ROW_SELECTOR}`)) enqueue(record.target);
+        if (record.removedNodes.length) removed = true;
       }
     }
+    if (removed) pruneDetached();
   });
-
   observer.observe(document, {
-    subtree: true,
-    childList: true,
-    characterData: true,
-    attributes: true,
-    attributeFilter: ["src", "srcset", "alt", "class"]
+    subtree: true, childList: true, characterData: true, attributes: true,
+    attributeFilter: ['src', 'srcset', 'alt', 'class', 'contenteditable']
   });
+  function applySettings(value) {
+    const next = P.normalize(value);
+    if (P.equal(next, profile)) return;
+    profile = next;
+    // Settings change rarely; a single pass also catches any newly visible chat UI.
+    scan(document);
+    pruneDetached();
+  }
+  // Subscribe before the initial read so a slow read cannot overwrite a newer save.
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes[P.KEY]) return;
+      settingsRevision++;
+      applySettings(changes[P.KEY].newValue);
+    });
+    const revision = settingsRevision;
+    P.load().then(value => { if (revision === settingsRevision) applySettings(value); }).catch(() => {
+      // Storage failure never prevents default replacement or the page's own rendering.
+    });
+  } catch { /* Extension context was invalidated during an upgrade; refresh reconnects it. */ }
   scan(document);
 })();

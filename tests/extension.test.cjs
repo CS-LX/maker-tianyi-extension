@@ -6,29 +6,38 @@ const { JSDOM } = require('jsdom');
 
 const extension = path.resolve(__dirname, '..');
 const script = fs.readFileSync(path.join(extension, 'content.js'), 'utf8');
+const profileScript = fs.readFileSync(path.join(extension, 'profile.js'), 'utf8');
 const manifest = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json'), 'utf8'));
 const avatar = 'chrome-extension://test-extension/assets/tianyi.jpg';
 const original = '/assets/tap-BM8wfTgR.webp';
 const bot = `<img alt="Bot Avatar" src="${original}" class="w-6 h-6 object-cover rounded-full">`;
 const row = `<div class="flex items-center gap-2"><div class="relative flex h-8 w-8 items-center justify-center">${bot}<svg id="progress-ring"></svg></div><div class="chat-thinking-shimmer text-sm">嗒啦啦正在执行命令...</div><span>6m38s</span></div>`;
 
-function fixture(t, html = '') {
+function fixture(t, html = '', stored = undefined) {
   const dom = new JSDOM(`<!doctype html><html><body>${html}</body></html>`, {
     url: 'https://maker.taptap.cn/app/test?chatId=first', runScripts: 'outside-only'
   });
-  dom.window.chrome = { runtime: { getURL: file => `chrome-extension://test-extension/${file}` } };
+  const listeners = new Set();
+  dom.window.chrome = {
+    runtime: { getURL: file => `chrome-extension://test-extension/${file}` },
+    storage: { local: { get: async () => ({ makerIdentity: stored }) }, onChanged: { addListener: listener => listeners.add(listener) } }
+  };
+  dom.changeProfile = value => {
+    stored = value;
+    for (const listener of listeners) listener({ makerIdentity: { newValue: value } }, 'local');
+  };
   t.after(() => dom.window.close());
   return dom;
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 10));
-const run = dom => dom.window.eval(script);
+const run = dom => { dom.window.eval(profileScript); dom.window.eval(script); };
 
 test('manifest limits injection and the bundled avatar to Maker', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.deepEqual(manifest.content_scripts[0].matches, ['https://maker.taptap.cn/*']);
   assert.equal(manifest.content_scripts[0].run_at, 'document_start');
   assert.deepEqual(manifest.web_accessible_resources[0].matches, ['https://maker.taptap.cn/*']);
-  assert.equal(manifest.permissions, undefined);
+  assert.deepEqual(manifest.permissions, ['storage']);
   assert.equal(manifest.background, undefined);
   for (const file of [...manifest.content_scripts[0].js, ...manifest.web_accessible_resources[0].resources]) {
     assert.ok(fs.existsSync(path.join(extension, file)), file);
@@ -147,4 +156,99 @@ test('settles after its own mutations and ignores unrelated streaming prose', as
   await tick();
   assert.equal(doc.querySelector('#reply').textContent, '回复中引用嗒啦啦，不应替换');
   counter.disconnect();
+});
+
+test('saved settings and successive live renames preserve original status text and literal nicknames', async t => {
+  const dom = fixture(t, row, { nickname: '小明', avatar: '' });
+  run(dom);
+  await tick();
+  const status = dom.window.document.querySelector('.chat-thinking-shimmer');
+  assert.equal(status.textContent, '小明正在执行命令...');
+  dom.changeProfile({ nickname: '嗒啦啦-$&<b>🙂', avatar: '' });
+  await tick();
+  assert.equal(status.textContent, '嗒啦啦-$&<b>🙂正在执行命令...');
+  assert.equal(status.querySelector('b'), null);
+  dom.changeProfile({ nickname: '新名字', avatar: '' });
+  await tick();
+  assert.equal(status.textContent, '新名字正在执行命令...');
+  status.firstChild.nodeValue = '嗒啦啦正在读取文件...';
+  await tick();
+  assert.equal(status.textContent, '新名字正在读取文件...');
+  dom.changeProfile(undefined);
+  await tick();
+  assert.equal(status.textContent, '天一一正在读取文件...');
+});
+
+test('a newer storage event wins over a stale initial read', async t => {
+  const dom = fixture(t, row);
+  let resolve;
+  dom.window.chrome.storage.local.get = () => new Promise(done => { resolve = done; });
+  run(dom);
+  dom.changeProfile({ nickname: '最新名字', avatar: '' });
+  resolve({ makerIdentity: { nickname: '过期名字', avatar: '' } });
+  await tick();
+  assert.equal(dom.window.document.querySelector('.chat-thinking-shimmer').textContent, '最新名字正在执行命令...');
+});
+
+test('storage read errors and malformed data recover to defaults', async t => {
+  const dom = fixture(t, row);
+  dom.window.chrome.storage.local.get = async () => { throw new Error('storage unavailable'); };
+  run(dom);
+  await tick();
+  dom.changeProfile({ nickname: null, avatar: 'https://untrusted.invalid/avatar.svg' });
+  await tick();
+  assert.equal(dom.window.document.querySelector('.chat-thinking-shimmer').textContent, '天一一正在执行命令...');
+  assert.equal(dom.window.document.querySelector('img').getAttribute('src'), avatar);
+});
+
+test('detached chat nodes keep weak provenance and update when reinserted', async t => {
+  const dom = fixture(t, row);
+  const doc = dom.window.document;
+  run(dom);
+  const container = doc.body.firstElementChild;
+  const status = container.querySelector('.chat-thinking-shimmer');
+  container.remove();
+  await tick();
+  dom.changeProfile({ nickname: '换个名字', avatar: '' });
+  await tick();
+  assert.equal(status.textContent, '天一一正在执行命令...');
+  doc.body.append(container);
+  await tick();
+  assert.equal(status.textContent, '换个名字正在执行命令...');
+});
+
+test('role changes and moving modified nodes into an editor restore the original UI', async t => {
+  const dom = fixture(t, row + '<div id="editor" contenteditable="true"></div>');
+  const doc = dom.window.document;
+  run(dom);
+  const status = doc.querySelector('.chat-thinking-shimmer');
+  status.className = '';
+  await tick();
+  assert.equal(status.textContent, '嗒啦啦正在执行命令...');
+  const image = doc.querySelector('img');
+  doc.querySelector('#editor').append(image);
+  await tick();
+  assert.equal(image.getAttribute('src'), original);
+});
+
+test('custom avatars update live and image failures fall back without an observer loop', async t => {
+  const data = 'data:image/png;base64,' + fs.readFileSync(path.join(extension, 'assets/icons/icon32.png')).toString('base64');
+  const dom = fixture(t, row);
+  run(dom);
+  const image = dom.window.document.querySelector('img');
+  dom.changeProfile({ nickname: '自定义', avatar: data });
+  await tick();
+  assert.equal(image.getAttribute('src'), data);
+  image.dispatchEvent(new dom.window.Event('error'));
+  await tick();
+  assert.equal(image.getAttribute('src'), avatar);
+  image.dispatchEvent(new dom.window.Event('error'));
+  await tick();
+  assert.equal(image.getAttribute('src'), original);
+  image.dispatchEvent(new dom.window.Event('error'));
+  await tick();
+  assert.equal(image.getAttribute('src'), original);
+  dom.changeProfile({ nickname: '重置', avatar: '' });
+  await tick();
+  assert.equal(image.getAttribute('src'), avatar);
 });

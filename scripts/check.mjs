@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { packageFiles, readManifest, root, validateTag } from './project.mjs';
 
 const manifest = await readManifest();
@@ -14,6 +15,17 @@ assert.equal(manifest.manifest_version, 3);
 assert.deepEqual(manifest.content_scripts[0].matches, ['https://maker.taptap.cn/*']);
 assert.deepEqual(manifest.web_accessible_resources[0].matches, ['https://maker.taptap.cn/*']);
 for (const file of packageFiles) await readFile(path.join(root, file));
+assert.deepEqual(manifest.permissions, ['storage']);
+for (const file of packageFiles.filter(file => file.endsWith('.js'))) {
+  execFileSync(process.execPath, ['--check', path.join(root, file)]);
+}
+for (const file of [manifest.action.default_popup, manifest.options_ui.page]) {
+  assert.ok(packageFiles.includes(file), `Missing settings page: ${file}`);
+  const html = await readFile(path.join(root, file), 'utf8');
+  for (const [, dependency] of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
+    assert.ok(packageFiles.includes(dependency), `Missing settings asset: ${dependency}`);
+  }
+}
 for (const entry of manifest.content_scripts) {
   for (const file of [...(entry.js ?? []), ...(entry.css ?? [])]) {
     assert.ok(packageFiles.includes(file), `Missing packaged content script: ${file}`);

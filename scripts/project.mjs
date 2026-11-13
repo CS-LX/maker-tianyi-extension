@@ -7,6 +7,7 @@ export const packageFiles = [
   'LICENSE', 'assets/tianyi.jpg',
   'assets/icons/icon16.png', 'assets/icons/icon32.png',
   'assets/icons/icon48.png', 'assets/icons/icon128.png',
+  'profile.js', 'avatar.js', 'popup.html', 'popup.css', 'popup.js',
   'content.js', 'manifest.json', '安装说明.txt'
 ];
 

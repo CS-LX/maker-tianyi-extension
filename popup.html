@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>定制聊天形象 · Maker</title>
+  <link rel="stylesheet" href="popup.css">
+  <script src="profile.js" defer></script>
+  <script src="avatar.js" defer></script>
+  <script src="popup.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="assets/icons/icon48.png" width="36" height="36" alt="">
+      <div><h1>Maker · 天一一</h1><p>定制你的聊天搭档</p></div>
+      <span class="version" id="version"></span>
+    </header>
+    <section class="preview" aria-label="聊天形象预览">
+      <div class="eyebrow"><span class="dot"></span>实时预览</div>
+      <div class="preview-row">
+        <img id="preview-avatar" src="assets/tianyi.jpg" width="56" height="56" alt="头像预览">
+        <div class="preview-text"><strong id="preview-name">天一一</strong><span>正在思考下一步…</span></div>
+      </div>
+    </section>
+    <form id="settings-form" novalidate>
+      <div class="label-row"><label for="nickname">昵称</label><span id="name-count">3 / 32</span></div>
+      <input id="nickname" type="text" value="天一一" maxlength="128" placeholder="给你的搭档起个名字" autocomplete="off" spellcheck="false" aria-describedby="nickname-help" disabled>
+      <p class="help" id="nickname-help">1–32 个字符，支持中文和表情。</p>
+      <div class="label-row avatar-label"><span>头像</span><button id="default-avatar" class="text-button" type="button" disabled>使用默认头像</button></div>
+      <input id="avatar-file" type="file" accept="image/*,.jfif,.avif,.apng,.svg,.ico,.bmp" hidden>
+      <button id="choose-avatar" class="upload-button" type="button" disabled><span aria-hidden="true">＋</span> 选择图片</button>
+      <p class="help">JPG、PNG、WebP、GIF、AVIF、SVG 等 · 最大 10 MB<br>居中裁成正方形；动图保存为静态头像。</p>
+      <p id="status" class="status" role="status" aria-live="polite">正在读取设置…</p>
+      <button id="reload" class="text-button" type="button" hidden>重新载入已保存设置</button>
+      <footer><button id="reset" class="secondary" type="button" disabled>恢复默认</button><button id="save" class="primary" type="submit" disabled>保存并应用</button></footer>
+    </form>
+    <p class="privacy">保存在本机 · 自动应用到已打开的 Maker 页面</p>
+  </main>
+</body>
+</html>

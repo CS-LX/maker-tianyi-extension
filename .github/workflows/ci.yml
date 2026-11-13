@@ -34,6 +34,17 @@ jobs:
         run: npm run check
       - name: Run tests
         run: npm test
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium --no-shell
+      - name: Test loaded extension in Chromium
+        run: npm run test:browser
+      - name: Upload settings preview
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: settings-preview-${{ github.sha }}
+          path: test-results/*.png
+          if-no-files-found: ignore
       - name: Build extension ZIP
         run: npm run build
       - name: Upload CI package
