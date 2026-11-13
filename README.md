@@ -34,13 +34,20 @@
 
 - 作用于 `https://maker.taptap.cn/*` 下的聊天界面。
 - 替换聊天头像、头像旁的姓名标签和“嗒啦啦正在执行命令...”等状态。
+- 评分按钮旁的“评价一下嗒啦啦的工作”随自定义昵称更新。
 - 支持折叠聊天行、流式状态更新、新增消息和页面内切换会话。
 - 保留头像圆形裁切、尺寸及进度外圈。
 - 设置预览、保存、恢复默认；实时同步所有已打开的 Maker 标签页。
-- 仅修改本机显示，聊天正文、代码、输入框和用户头像保持原样。
+- 仅修改本机显示，用户昵称、引用的用户原文、聊天正文、代码、输入框和用户头像保持原样。
 - 扩展自身不发送网络请求，不读取 Cookie，没有统计服务；仅申请保存设置所需的 `storage` 权限。
 
 适配标记：`img[alt="Bot Avatar"]`、`.chat-thinking-shimmer`、`.chat-collapsed-row`。若 Maker 修改页面结构，需要更新 `content.js`。这是非官方界面定制扩展。
+
+评价提示使用 `div.border-t.border-border > div.flex.flex-wrap.items-center > span.select-none.text-xs.text-muted-foreground`，并要求原文恰好为“评价一下嗒啦啦的工作”。已有的代码、Markdown 正文和可编辑区域保护仍然生效。
+
+### 1.1.0.1 修复
+
+[Issue #1](https://github.com/CS-LX/maker-tianyi-extension/issues/1) 报告了这句话遗漏替换。根据用户提供的 DOM 和 Maker 前端代码，已确认的节点是评分按钮旁的固定提示；此版本修复该提示。真正的用户提问引用及引用作者昵称保持原文，不进行全文替换。
 
 ## 图标
 
@@ -59,7 +66,7 @@ npm run test:browser
 npm run build
 ```
 
-测试覆盖聊天布局、动态更新、会话切换、头像节点复用、连续改名、读取/保存失败、过期读取、多窗口修改冲突、文件选择竞态，以及版本校验和 ZIP 内容。浏览器测试会在独立 Chromium 配置中实际加载扩展，验证八种图片格式、设置持久化、多标签页同步和异常图片恢复；使用拦截的 Maker 测试页面，不读取真实账号或聊天。Linux 初次运行可用 `npx playwright install --with-deps chromium --no-shell` 安装运行依赖。
+测试覆盖聊天布局、评价提示与引用/作者边界、动态更新、会话切换、头像节点复用、连续改名、读取/保存失败、过期读取、多窗口修改冲突、文件选择竞态，以及版本校验和 ZIP 内容。浏览器测试会在独立 Chromium 配置中实际加载扩展，验证真实 DOM 样本中的评价提示、八种图片格式、设置持久化、多标签页同步和异常图片恢复；使用拦截的 Maker 测试页面，不读取真实账号或聊天。Linux 初次运行可用 `npx playwright install --with-deps chromium --no-shell` 安装运行依赖。
 
 构建结果写入 `dist/`，安装包只包含运行所需文件、安装说明和 MIT 许可证，同时生成 SHA-256 校验值。
 

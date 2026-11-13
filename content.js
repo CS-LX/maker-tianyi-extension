@@ -5,6 +5,8 @@
   const DEFAULT_AVATAR = chrome.runtime.getURL('assets/tianyi.jpg');
   const AVATAR_SELECTOR = 'img[alt="Bot Avatar"]';
   const STATUS_SELECTOR = '.chat-thinking-shimmer';
+  const FEEDBACK_PROMPT = '评价一下嗒啦啦的工作';
+  const FEEDBACK_SELECTOR = 'div.border-t.border-border > div.flex.flex-wrap.items-center > span.select-none.text-xs.text-muted-foreground';
   const ROW_SELECTOR = '.chat-collapsed-row, .flex.items-center';
   const EXCLUDED_SELECTOR = [
     'script', 'style', 'noscript', 'template', 'textarea', 'input', 'select',
@@ -55,8 +57,11 @@
     // Only reuse provenance while the page still contains our last rendered value.
     const original = record && current === record.rendered ? record.original : current;
     const parent = text.parentElement;
+    // Maker renders this fixed rating caption beside its feedback buttons.
+    // Match both its structure and original wording, never arbitrary quoted messages.
+    const isFeedbackPrompt = original?.trim() === FEEDBACK_PROMPT && parent?.matches(FEEDBACK_SELECTOR);
     if (!original?.includes(ORIGINAL_NAME) || !parent || excluded(parent) ||
-        !(parent.closest(STATUS_SELECTOR) || isNameLabel(text, original))) {
+        !(parent.closest(STATUS_SELECTOR) || isNameLabel(text, original) || isFeedbackPrompt)) {
       restoreText(text);
       return;
     }

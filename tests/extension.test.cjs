@@ -7,6 +7,7 @@ const { JSDOM } = require('jsdom');
 const extension = path.resolve(__dirname, '..');
 const script = fs.readFileSync(path.join(extension, 'content.js'), 'utf8');
 const profileScript = fs.readFileSync(path.join(extension, 'profile.js'), 'utf8');
+const feedback = fs.readFileSync(path.join(extension, 'tests/fixtures/feedback.html'), 'utf8');
 const manifest = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json'), 'utf8'));
 const avatar = 'chrome-extension://test-extension/assets/tianyi.jpg';
 const original = '/assets/tap-BM8wfTgR.webp';
@@ -31,6 +32,108 @@ function fixture(t, html = '', stored = undefined) {
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 10));
 const run = dom => { dom.window.eval(profileScript); dom.window.eval(script); };
+
+test('replaces the observed rating prompt while preserving quotes, authors, and feedback controls', async t => {
+  const dom = fixture(t, feedback + '<blockquote><span id="author">新东方在逃学员</span><p id="quote">评价一下嗒啦啦的工作</p></blockquote>');
+  const doc = dom.window.document;
+  const buttons = [...doc.querySelectorAll('#feedback button')];
+  let clicks = 0;
+  buttons[0].addEventListener('click', () => clicks++);
+  run(dom);
+  await tick();
+  assert.equal(doc.querySelector('#feedback-caption').textContent, '评价一下天一一的工作');
+  assert.equal(doc.querySelector('#author').textContent, '新东方在逃学员');
+  assert.equal(doc.querySelector('#quote').textContent, '评价一下嗒啦啦的工作');
+  assert.deepEqual([...doc.querySelectorAll('#feedback button')], buttons);
+  buttons[0].click();
+  assert.equal(clicks, 1);
+});
+
+test('rating prompt handles late mount, live renames, page rewrites, and conversation replacement', async t => {
+  const dom = fixture(t, '', { nickname: '小明', avatar: '' });
+  const doc = dom.window.document;
+  run(dom);
+  await tick();
+  doc.body.innerHTML = feedback;
+  await tick();
+  const caption = doc.querySelector('#feedback-caption');
+  assert.equal(caption.textContent, '评价一下小明的工作');
+  dom.changeProfile({ nickname: '嗒啦啦-$&<b>🙂', avatar: '' });
+  await tick();
+  assert.equal(caption.textContent, '评价一下嗒啦啦-$&<b>🙂的工作');
+  assert.equal(caption.querySelector('b'), null);
+  dom.changeProfile({ nickname: '新名字', avatar: '' });
+  await tick();
+  assert.equal(caption.textContent, '评价一下新名字的工作');
+  caption.firstChild.nodeValue = '评价一下嗒啦啦的工作';
+  await tick();
+  assert.equal(caption.textContent, '评价一下新名字的工作');
+  doc.body.innerHTML = feedback;
+  await tick();
+  assert.equal(doc.querySelector('#feedback-caption').textContent, '评价一下新名字的工作');
+  dom.changeProfile(undefined);
+  await tick();
+  assert.equal(doc.querySelector('#feedback-caption').textContent, '评价一下天一一的工作');
+});
+
+test('rating prompt requires both the observed structure and fixed UI wording', async t => {
+  const dom = fixture(t, feedback);
+  const doc = dom.window.document;
+  const caption = doc.querySelector('#feedback-caption');
+  for (const value of ['嗒啦啦', '嗒啦啦的用户昵称', '用户说：评价一下嗒啦啦的工作']) {
+    const author = caption.cloneNode(false);
+    author.removeAttribute('id');
+    author.textContent = value;
+    caption.after(author);
+  }
+  const lookalike = caption.cloneNode(true);
+  lookalike.id = 'lookalike';
+  doc.body.append(lookalike);
+  run(dom);
+  await tick();
+  assert.deepEqual([...doc.querySelectorAll('#feedback span')].map(el => el.textContent).sort(), [
+    '评价一下天一一的工作', '嗒啦啦', '嗒啦啦的用户昵称', '用户说：评价一下嗒啦啦的工作'
+  ].sort());
+  assert.equal(lookalike.textContent, '评价一下嗒啦啦的工作');
+  for (const wrapper of ['<div class="prose">', '<div class="markdown">', '<pre>', '<code>', '<div contenteditable="true">', '<div role="textbox">']) {
+    const holder = doc.createElement('div');
+    holder.innerHTML = wrapper + feedback;
+    doc.body.append(holder);
+    await tick();
+    assert.equal(holder.querySelector('#feedback-caption').textContent, '评价一下嗒啦啦的工作', wrapper);
+  }
+});
+
+test('rating prompt restores recycled nodes and settles after its own mutations', async t => {
+  const dom = fixture(t, feedback + '<div id="editor" contenteditable="true"></div>');
+  const doc = dom.window.document;
+  let mutations = 0;
+  const counter = new dom.window.MutationObserver(records => { mutations += records.length; });
+  counter.observe(doc, { subtree: true, characterData: true, childList: true });
+  run(dom);
+  await tick();
+  const settled = mutations;
+  await tick();
+  assert.equal(mutations, settled);
+  const box = doc.querySelector('#feedback');
+  const caption = doc.querySelector('#feedback-caption');
+  box.classList.remove('border-t');
+  await tick();
+  assert.equal(caption.textContent, '评价一下嗒啦啦的工作');
+  box.classList.add('border-t');
+  await tick();
+  assert.equal(caption.textContent, '评价一下天一一的工作');
+  box.remove();
+  await tick();
+  dom.changeProfile({ nickname: '更新后的昵称', avatar: '' });
+  doc.body.append(box);
+  await tick();
+  assert.equal(caption.textContent, '评价一下更新后的昵称的工作');
+  doc.querySelector('#editor').append(box);
+  await tick();
+  assert.equal(caption.textContent, '评价一下嗒啦啦的工作');
+  counter.disconnect();
+});
 
 test('manifest limits injection and the bundled avatar to Maker', () => {
   assert.equal(manifest.manifest_version, 3);

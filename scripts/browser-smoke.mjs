@@ -23,7 +23,8 @@ try {
   assert.match(extensionId, /^[a-p]{32}$/);
   console.log(`Loaded unpacked extension ${extensionId} in ${context.browser().version()}`);
   const jpg = await readFile(path.join(root, 'assets/tianyi.jpg'));
-  const fixture = '<!doctype html><html><head><meta charset="utf-8"></head><body><div class="flex items-center"><div class="relative flex items-center"><img alt="Bot Avatar" src="/assets/tap-test.webp"><svg id="ring"></svg></div><div class="chat-thinking-shimmer">嗒啦啦正在思考...</div></div><p id="prose">正文提到嗒啦啦</p></body></html>';
+  const feedback = await readFile(path.join(root, 'tests/fixtures/feedback.html'), 'utf8');
+  const fixture = '<!doctype html><html><head><meta charset="utf-8"></head><body><div class="flex items-center"><div class="relative flex items-center"><img alt="Bot Avatar" src="/assets/tap-test.webp"><svg id="ring"></svg></div><div class="chat-thinking-shimmer">嗒啦啦正在思考...</div></div><p id="prose">正文提到嗒啦啦</p><blockquote><span id="author">新东方在逃学员</span><p id="quote">评价一下嗒啦啦的工作</p></blockquote>' + feedback + '</body></html>';
   await context.route('https://maker.taptap.cn/**', route => {
     if (new URL(route.request().url()).pathname.startsWith('/assets/')) return route.fulfill({ contentType: 'image/jpeg', body: jpg });
     return route.fulfill({ contentType: 'text/html; charset=utf-8', body: fixture });
@@ -39,6 +40,14 @@ try {
   assert.equal(await popup.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   pass('extension loads, default settings render, popup fits its viewport');
 
+  assert.equal(await maker.locator('#feedback-caption').textContent(), '评价一下天一一的工作');
+  await maker.locator('#feedback button').first().evaluate(button => {
+    button.addEventListener('click', () => { button.dataset.clicked = 'yes'; });
+  });
+  await maker.locator('#feedback button').first().dispatchEvent('click');
+  assert.equal(await maker.locator('#feedback button').first().getAttribute('data-clicked'), 'yes');
+  pass('observed rating caption uses the default nickname and feedback controls still work');
+
   const nickname = '<b>小林 $&🙂</b>';
   await popup.locator('#nickname').fill(nickname);
   await popup.locator('#save').click();
@@ -46,7 +55,18 @@ try {
   await maker.waitForFunction(name => document.querySelector('.chat-thinking-shimmer').textContent === name + '正在思考...', nickname);
   assert.equal(await maker.locator('.chat-thinking-shimmer b').count(), 0);
   assert.equal(await maker.locator('#prose').textContent(), '正文提到嗒啦啦');
+  assert.equal(await maker.locator('#feedback-caption').textContent(), `评价一下${nickname}的工作`);
+  assert.equal(await maker.locator('#feedback-caption b').count(), 0);
+  assert.equal(await maker.locator('#author').textContent(), '新东方在逃学员');
+  assert.equal(await maker.locator('#quote').textContent(), '评价一下嗒啦啦的工作');
   pass('literal nickname persists and updates the already-open chat');
+
+  await maker.locator('#feedback-caption').evaluate(caption => { caption.firstChild.nodeValue = '评价一下嗒啦啦的工作'; });
+  await maker.waitForFunction(name => document.querySelector('#feedback-caption').textContent === `评价一下${name}的工作`, nickname);
+  await maker.locator('#feedback').evaluate(box => box.remove());
+  await maker.locator('body').evaluate((body, html) => body.insertAdjacentHTML('beforeend', html), feedback);
+  await maker.waitForFunction(name => document.querySelector('#feedback-caption').textContent === `评价一下${name}的工作`, nickname);
+  pass('rating caption follows page rewrites and newly mounted replies');
 
   const png = await readFile(path.join(root, 'assets/icons/icon128.png'));
   const ico = Buffer.alloc(22 + png.length);
@@ -88,6 +108,7 @@ try {
   const secondMaker = await context.newPage();
   await secondMaker.goto('https://maker.taptap.cn/app/second-conversation');
   await secondMaker.waitForFunction(name => document.querySelector('.chat-thinking-shimmer').textContent === name + '正在思考...', nickname);
+  assert.equal(await secondMaker.locator('#feedback-caption').textContent(), `评价一下${nickname}的工作`);
   pass('custom PNG displays in live chat and survives reopening settings and a new tab');
 
   await popup.locator('#avatar-file').setInputFiles({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('not an image') });
@@ -104,7 +125,10 @@ try {
   await popup.locator('#reset').click();
   await popup.locator('#save').click();
   await popup.waitForFunction(() => document.querySelector('#status').dataset.kind === 'success');
-  for (const page of [maker, secondMaker]) await page.waitForFunction(() => document.querySelector('.chat-thinking-shimmer').textContent === '天一一正在思考...');
+  for (const page of [maker, secondMaker]) {
+    await page.waitForFunction(() => document.querySelector('.chat-thinking-shimmer').textContent === '天一一正在思考...');
+    assert.equal(await page.locator('#feedback-caption').textContent(), '评价一下天一一的工作');
+  }
   assert.equal(await popup.locator('#preview-avatar').getAttribute('src'), `chrome-extension://${extensionId}/assets/tianyi.jpg`);
   pass('restoring defaults updates every open Maker tab');
   await mkdir(path.join(root, 'test-results'), { recursive: true });

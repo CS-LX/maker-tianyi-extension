@@ -10,11 +10,12 @@ Maker · 天一一（Chrome / Edge 扩展）
 效果
 - https://maker.taptap.cn/ 下所有页面的聊天 Bot Avatar 使用自定义头像。
 - “嗒啦啦正在执行命令...”等状态使用自定义昵称，默认是“天一一”。
+- 评分按钮旁的“评价一下嗒啦啦的工作”也使用自定义昵称。
 - 兼容已确认的折叠聊天行、运行中状态行，以及头像旁的独立姓名标签。
 - 保留头像原来的圆形裁切、尺寸和进度外圈。
 - 新消息、状态更新和页面内会话切换时自动处理。
 - 仅修改本机页面显示；使用 storage 权限把设置保存在本机，不上传或同步到其他设备。
-- 不替换聊天正文、代码示例、输入框或用户头像。
+- 用户昵称、引用的用户原文、聊天正文、代码示例、输入框和用户头像保持原样。
 
 自定义
 1. 点击工具栏扩展图标，或在扩展详情中打开“扩展程序选项”。
@@ -35,6 +36,8 @@ Maker · 天一一（Chrome / Edge 扩展）
 适配范围
 基于 2026-11-13 提供的页面结构：
 img[alt="Bot Avatar"]、.chat-thinking-shimmer、.chat-collapsed-row。
+评价提示：div.border-t.border-border > div.flex.flex-wrap.items-center > span.select-none.text-xs.text-muted-foreground，且原文为“评价一下嗒啦啦的工作”。
+该提示是评分按钮旁的固定文案；真正的引用原文不在替换范围内。
 若 Maker 将来修改这些标记，需要相应更新 content.js。
 本扩展不改变服务端名称、模型身份或聊天记录。
 
