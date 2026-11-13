@@ -6,7 +6,7 @@
 
 一个 Chrome / Edge Manifest V3 扩展，将 [TapTap Maker](https://maker.taptap.cn/) 聊天里的“嗒啦啦”名字和头像替换为“天一一”。
 
-<img src="assets/tianyi.jpg" width="96" height="96" alt="天一一头像">
+<img src="assets/icon-master.png" width="160" height="160" alt="嗒啦啦通过薄荷绿箭头变为天一一的扩展图标">
 
 ## 安装
 
@@ -34,6 +34,8 @@
 
 用新的 JPG 替换 `assets/tianyi.jpg`；在 `content.js` 中修改 `DISPLAY_NAME`。修改后重新加载扩展并刷新 Maker。
 
+扩展图标采用“嗒啦啦 → 天一一”的双头像和单向箭头设计。原图位于 `assets/icon-master.png`，16、32、48、128 像素 PNG 位于 `assets/icons/`，用于工具栏和扩展管理页。
+
 ## 开发与测试
 
 推荐 Node.js 24.15.0 或更新的 24.x，CI 使用 Node.js 24。
@@ -54,20 +56,20 @@ npm run build
 - 标签必须与 `manifest.json` 的四段版本号完全一致，并且指向已合入 `main` 的提交，否则发布失败。
 - `manifest.json` 是产品版本号的唯一来源。每段是 0–65535 的整数，不允许前导零，四段不能全为零。
 
-例如发布 `1.0.0.1`：
+例如发布 `1.0.0.2`：
 
 ```sh
 git switch main
 git pull --ff-only
-npm run version:set -- 1.0.0.1
+npm run version:set -- 1.0.0.2
 npm run check
 npm test
 git add manifest.json
-git commit -m "chore: release 1.0.0.1"
+git commit -m "chore: release 1.0.0.2"
 git push origin main
 # 等待该提交的 CI 成功，再创建并推送标签：
-git tag -a v1.0.0.1 -m "Release v1.0.0.1"
-git push origin v1.0.0.1
+git tag -a v1.0.0.2 -m "Release v1.0.0.2"
+git push origin v1.0.0.2
 ```
 
 Release 包可解压后直接加载。GitHub 自动附带的 Source code 压缩包是源码归档。

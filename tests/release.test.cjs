@@ -55,7 +55,10 @@ test('ZIP is deterministic, loads from its root, and excludes development or pri
   assert.deepEqual(fs.readFileSync(zipPath), first);
   const files = unzipSync(first);
   assert.deepEqual(Object.keys(files).sort(), [
-    'LICENSE', 'assets/tianyi.jpg', 'content.js', 'manifest.json', '安装说明.txt'
+    'LICENSE', 'assets/tianyi.jpg',
+    'assets/icons/icon16.png', 'assets/icons/icon32.png',
+    'assets/icons/icon48.png', 'assets/icons/icon128.png',
+    'content.js', 'manifest.json', '安装说明.txt'
   ].sort());
   assert.equal(JSON.parse(strFromU8(files['manifest.json'])).version, version);
   assert.deepEqual(Buffer.from(files['assets/tianyi.jpg']), fs.readFileSync(path.join(root, 'assets/tianyi.jpg')));
