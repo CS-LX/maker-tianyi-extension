@@ -33,11 +33,21 @@ Maker · 天一一（Chrome / Edge 扩展）
 在扩展管理页关闭或移除此扩展，再刷新 Maker 页面，即可恢复原样。
 加载后的扩展文件夹必须保留，不要删除或移动。
 
+黑金卡图案（1.2）
+1. 点击扩展图标，切换到“黑金卡”页签。
+2. 在大图网格选择嗒啦啦、奶蛙或自定义上传，查看预览后“保存并应用”。
+3. 嗒啦啦优先使用网页原图，找不到或加载失败时使用内置素材。面板通过已打开的 Maker 卡片获取原图，支持手动刷新素材。
+4. 奶蛙为透明底金色剪影。上传图保留比例与透明度，最长边最多 512 像素；图片格式/大小限制同头像，动图保存为静态。
+5. 卡面与聊天头像/昵称分别保存。切换预设保留上传图；“恢复嗒啦啦”清除上传图，保存后生效。
+6. 保留卡片文字、积分、渐隐与窄屏隐藏规则。页面内切换和新卡片挂载会自动应用。
+7. 只加载 Maker 公开目录的原图，不上传图片；无需额外权限。
+
 适配范围
 基于 2026-11-13 提供的页面结构：
 img[alt="Bot Avatar"]、.chat-thinking-shimmer、.chat-collapsed-row。
 评价提示：div.border-t.border-border > div.flex.flex-wrap.items-center > span.select-none.text-xs.text-muted-foreground，且原文为“评价一下嗒啦啦的工作”。
 该提示是评分按钮旁的固定文案；真正的引用原文不在替换范围内。
+黑金卡：article[data-tier="ultra"]:not([data-audience="student"]) > [data-decoration="tara"]。
 若 Maker 将来修改这些标记，需要相应更新 content.js。
 本扩展不改变服务端名称、模型身份或聊天记录。
 

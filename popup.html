@@ -7,7 +7,9 @@
   <link rel="stylesheet" href="popup.css">
   <script src="profile.js" defer></script>
   <script src="avatar.js" defer></script>
+  <script src="card-profile.js" defer></script>
   <script src="popup.js" defer></script>
+  <script src="card-popup.js" defer></script>
 </head>
 <body>
   <main>
@@ -16,6 +18,11 @@
       <div><h1>Maker · 天一一</h1><p>定制你的聊天搭档</p></div>
       <span class="version" id="version"></span>
     </header>
+    <div class="tabs" role="tablist" aria-label="定制内容">
+      <button id="chat-tab" type="button" role="tab" aria-selected="true" aria-controls="chat-panel">聊天形象</button>
+      <button id="card-tab" type="button" role="tab" aria-selected="false" aria-controls="card-panel" tabindex="-1">黑金卡</button>
+    </div>
+    <section id="chat-panel" role="tabpanel" aria-labelledby="chat-tab">
     <section class="preview" aria-label="聊天形象预览">
       <div class="eyebrow"><span class="dot"></span>实时预览</div>
       <div class="preview-row">
@@ -35,6 +42,35 @@
       <button id="reload" class="text-button" type="button" hidden>重新载入已保存设置</button>
       <footer><button id="reset" class="secondary" type="button" disabled>恢复默认</button><button id="save" class="primary" type="submit" disabled>保存并应用</button></footer>
     </form>
+    </section>
+    <section id="card-panel" role="tabpanel" aria-labelledby="card-tab" hidden>
+      <div class="card-preview" aria-label="黑金卡图案预览">
+        <img id="card-preview-image" src="assets/cards/tara.webp" alt="" class="card-figure">
+        <div class="card-preview-copy"><span>制造会员</span><strong>制造 Ultra</strong><p>你的专属卡面</p></div>
+        <span class="card-preview-badge">预览</span>
+        <span class="card-preview-footer">BLACK & GOLD</span>
+      </div>
+      <form id="card-form">
+        <div class="label-row"><span id="card-choice-label">选择卡面图案</span><button id="card-refresh-source" class="text-button" type="button">刷新网页素材</button></div>
+        <div class="card-grid" role="group" aria-labelledby="card-choice-label">
+          <button class="card-choice" id="card-tara" type="button" aria-pressed="true" disabled>
+            <span class="card-choice-art"><img id="card-tara-image" src="assets/cards/tara.webp" alt=""></span><strong>嗒啦啦</strong><small>网页原图优先</small><span class="choice-check" aria-hidden="true">✓</span>
+          </button>
+          <button class="card-choice" id="card-frog" type="button" aria-pressed="false" disabled>
+            <span class="card-choice-art"><img src="assets/cards/frog.png" alt=""></span><strong>奶蛙</strong><small>金色剪影</small><span class="choice-check" aria-hidden="true">✓</span>
+          </button>
+          <button class="card-choice" id="card-custom" type="button" aria-pressed="false" disabled>
+            <span class="card-choice-art"><img id="card-custom-image" alt="" hidden><span id="card-upload-plus" aria-hidden="true">＋</span></span><strong>自定义</strong><small id="card-upload-label">上传图片</small><span class="choice-check" aria-hidden="true">✓</span>
+          </button>
+        </div>
+        <input id="card-file" type="file" accept="image/*,.jfif,.avif,.apng,.svg,.ico,.bmp" hidden>
+        <div class="card-source-row"><span id="card-source">嗒啦啦 · 内置素材</span><button id="card-replace" type="button" class="text-button" hidden>更换上传图片</button></div>
+        <p class="help">支持 PNG、WebP、JPG、SVG 等 · 最大 10 MB<br>保留比例与透明度，推荐透明底图片；动图转为静态。</p>
+        <p id="card-status" class="status" role="status" aria-live="polite">正在读取设置…</p>
+        <button id="card-reload" type="button" class="text-button" hidden>重新载入已保存设置</button>
+        <footer><button id="card-reset" type="button" class="secondary" disabled>恢复嗒啦啦</button><button id="card-save" type="submit" class="primary" disabled>保存并应用</button></footer>
+      </form>
+    </section>
     <p class="privacy">保存在本机 · 自动应用到已打开的 Maker 页面</p>
   </main>
 </body>

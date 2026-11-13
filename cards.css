@@ -1,0 +1,4 @@
+article[data-tier="ultra"]:not([data-audience="student"]) > [data-decoration="tara"][data-maker-card-art] {
+  background-image: var(--maker-card-background) !important;
+  background-size: contain !important;
+}

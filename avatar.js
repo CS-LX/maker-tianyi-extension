@@ -4,7 +4,7 @@
   const MAX_PIXELS = 40_000_000;
   const EXTENSIONS = { svg: 'image/svg+xml', avif: 'image/avif', gif: 'image/gif', png: 'image/png', apng: 'image/png', webp: 'image/webp', bmp: 'image/bmp', ico: 'image/x-icon', jpg: 'image/jpeg', jpeg: 'image/jpeg', jfif: 'image/jpeg' };
 
-  async function importFile(file) {
+  async function importFile(file, { fit = 'cover' } = {}) {
     if (!file || file.size === 0) throw new Error('图片为空，请重新选择。');
     if (file.size > MAX_FILE_SIZE) throw new Error('图片不能超过 10 MB，请先缩小文件。');
     const guessedType = EXTENSIONS[file.name?.split('.').pop().toLowerCase()];
@@ -26,13 +26,16 @@
       }
       const side = Math.min(width, height);
       const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = Math.min(side, 512);
+      const scale = Math.min(1, 512 / Math.max(width, height));
+      canvas.width = fit === 'contain' ? Math.max(1, Math.round(width * scale)) : Math.min(side, 512);
+      canvas.height = fit === 'contain' ? Math.max(1, Math.round(height * scale)) : Math.min(side, 512);
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('浏览器无法处理图片，请重新打开设置后重试。');
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       // Rasterization normalizes orientation/format, removes metadata and freezes animated inputs.
-      ctx.drawImage(image, (width - side) / 2, (height - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
+      if (fit === 'contain') ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      else ctx.drawImage(image, (width - side) / 2, (height - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
       const avatar = canvas.toDataURL('image/png');
       if (!MakerProfile.validAvatar(avatar)) throw new Error('转换后的头像无效，请换一张图片。');
       return avatar;

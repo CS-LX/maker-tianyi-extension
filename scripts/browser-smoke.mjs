@@ -24,8 +24,13 @@ try {
   console.log(`Loaded unpacked extension ${extensionId} in ${context.browser().version()}`);
   const jpg = await readFile(path.join(root, 'assets/tianyi.jpg'));
   const feedback = await readFile(path.join(root, 'tests/fixtures/feedback.html'), 'utf8');
-  const fixture = '<!doctype html><html><head><meta charset="utf-8"></head><body><div class="flex items-center"><div class="relative flex items-center"><img alt="Bot Avatar" src="/assets/tap-test.webp"><svg id="ring"></svg></div><div class="chat-thinking-shimmer">嗒啦啦正在思考...</div></div><p id="prose">正文提到嗒啦啦</p><blockquote><span id="author">新东方在逃学员</span><p id="quote">评价一下嗒啦啦的工作</p></blockquote>' + feedback + '</body></html>';
+  const card = await readFile(path.join(root, 'tests/fixtures/card.html'), 'utf8');
+  const cardCSS = await readFile(path.join(root, 'tests/fixtures/card.css'), 'utf8');
+  const taraImage = await readFile(path.join(root, 'assets/cards/tara.webp'));
+  const fixture = '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/test-card.css"></head><body><div class="flex items-center"><div class="relative flex items-center"><img alt="Bot Avatar" src="/assets/tap-test.webp"><svg id="ring"></svg></div><div class="chat-thinking-shimmer">嗒啦啦正在思考...</div></div><p id="prose">正文提到嗒啦啦</p><blockquote><span id="author">新东方在逃学员</span><p id="quote">评价一下嗒啦啦的工作</p></blockquote>' + feedback + card + '</body></html>';
   await context.route('https://maker.taptap.cn/**', route => {
+    if (new URL(route.request().url()).pathname === '/test-card.css') return route.fulfill({ contentType: 'text/css', body: cardCSS });
+    if (new URL(route.request().url()).pathname === '/membership/ultra-tara.webp') return route.fulfill({ contentType: 'image/webp', body: taraImage });
     if (new URL(route.request().url()).pathname.startsWith('/assets/')) return route.fulfill({ contentType: 'image/jpeg', body: jpg });
     return route.fulfill({ contentType: 'text/html; charset=utf-8', body: fixture });
   });
@@ -133,6 +138,69 @@ try {
   pass('restoring defaults updates every open Maker tab');
   await mkdir(path.join(root, 'test-results'), { recursive: true });
   await popup.screenshot({ path: path.join(root, 'test-results/settings.png'), fullPage: true });
+
+  await maker.setViewportSize({ width: 1000, height: 700 });
+  await popup.locator('#card-tab').click();
+  await popup.waitForFunction(() => document.querySelector('#card-tara-image').src === 'https://maker.taptap.cn/membership/ultra-tara.webp');
+  await popup.locator('#card-tara-image').evaluate(image => image.decode());
+  assert.equal(await popup.locator('#chat-panel').isVisible(), false);
+  assert.equal(await popup.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  pass('card grid discovers the website preset without additional permissions');
+
+  await popup.locator('#card-frog').click();
+  await popup.locator('#card-save').click();
+  await popup.waitForFunction(() => document.querySelector('#card-status').dataset.kind === 'success');
+  for (const page of [maker, secondMaker]) await page.waitForFunction(() => getComputedStyle(document.querySelector('[data-decoration="tara"]')).backgroundImage.includes('/assets/cards/frog.png'));
+  const decoration = maker.locator('[data-decoration="tara"]');
+  const geometry = await decoration.evaluate(el => {
+    const style = getComputedStyle(el);
+    return { position: style.position, pointer: style.pointerEvents, mask: style.maskImage, fade: getComputedStyle(el, '::after').backgroundImage, display: style.display };
+  });
+  assert.equal(geometry.position, 'absolute');
+  assert.equal(geometry.pointer, 'none');
+  assert.equal(geometry.display, 'block');
+  assert.match(geometry.mask, /gradient/); assert.match(geometry.fade, /gradient/);
+  assert.equal(await maker.locator('dd').textContent(), '600,000');
+  await popup.screenshot({ path: path.join(root, 'test-results/card-settings.png'), fullPage: true });
+  await maker.locator('article').screenshot({ path: path.join(root, 'test-results/frog-card.png') });
+  await maker.setViewportSize({ width: 360, height: 640 });
+  assert.equal(await decoration.evaluate(el => getComputedStyle(el).display), 'none');
+  pass('frog preset updates all cards while preserving fade, text, and responsive visibility');
+
+  const upload = { name: 'tall.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="400"><rect x="50" y="20" width="100" height="380" fill="#e9cb7c"/></svg>') };
+  await popup.locator('#card-file').setInputFiles(upload);
+  await popup.waitForFunction(() => /图片已准备好/.test(document.querySelector('#card-status').textContent));
+  const customCard = await popup.locator('#card-preview-image').getAttribute('src');
+  assert.deepEqual(await popup.locator('#card-preview-image').evaluate(async image => {
+    await image.decode(); const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+    const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+    return [image.naturalWidth, image.naturalHeight, ctx.getImageData(0, 0, 1, 1).data[3]];
+  }), [200, 400, 0]);
+  await popup.locator('#card-save').click();
+  await popup.waitForFunction(() => document.querySelector('#card-status').dataset.kind === 'success');
+  await maker.waitForFunction(data => getComputedStyle(document.querySelector('[data-decoration="tara"]')).backgroundImage.includes(data), customCard);
+  await popup.reload(); await popup.locator('#card-tab').click();
+  await popup.waitForFunction(() => document.querySelector('#card-custom').getAttribute('aria-pressed') === 'true');
+  assert.equal(await popup.locator('#card-preview-image').getAttribute('src'), customCard);
+  assert.equal(await popup.locator('#nickname').inputValue(), '天一一');
+  pass('uploaded card art keeps aspect ratio and alpha, persists separately from chat settings');
+
+  await popup.locator('#card-file').setInputFiles({ name: 'bad.png', mimeType: 'image/png', buffer: Buffer.from('broken') });
+  await popup.waitForFunction(() => document.querySelector('#card-status').dataset.kind === 'error');
+  assert.equal(await popup.locator('#card-preview-image').getAttribute('src'), customCard);
+  await maker.locator('section[aria-label="制造会员"]').evaluate(el => el.remove());
+  await maker.locator('body').evaluate((el, html) => el.insertAdjacentHTML('beforeend', html), card);
+  await maker.waitForFunction(data => getComputedStyle(document.querySelector('[data-decoration="tara"]')).backgroundImage.includes(data), customCard);
+  pass('broken uploads preserve the card choice and newly mounted cards receive saved art');
+
+  await popup.locator('#card-reset').click(); await popup.locator('#card-save').click();
+  await popup.waitForFunction(() => document.querySelector('#card-status').dataset.kind === 'success');
+  for (const page of [maker, secondMaker]) await page.waitForFunction(() => !document.querySelector('[data-decoration="tara"]').hasAttribute('data-maker-card-art'));
+  await maker.addStyleTag({ content: '.membership-art{background-image:none!important}' });
+  await maker.waitForFunction(() => document.querySelector('[data-decoration="tara"]').style.getPropertyValue('--maker-card-background').includes('/assets/cards/tara.webp'));
+  await popup.evaluate(() => { document.querySelector('#card-tara-image').dispatchEvent(new Event('error')); });
+  assert.equal(await popup.locator('#card-tara-image').getAttribute('src'), `chrome-extension://${extensionId}/assets/cards/tara.webp`);
+  pass('reset restores native art; missing page art and failed preview use the bundled fallback');
   assert.deepEqual(errors, []);
   console.log(`Browser smoke: ${passed} checks passed.`);
 } catch (error) {

@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Maker · 天一一",
-  "version": "1.1.0.1",
+  "version": "1.2.0.0",
   "author": "Linxium (CS-LX)",
-  "description": "自定义 TapTap Maker 聊天助手的昵称和头像，默认使用天一一。",
+  "description": "自定义 TapTap Maker 聊天助手的昵称、头像和黑金卡图案。",
   "permissions": ["storage"],
   "options_ui": { "page": "popup.html", "open_in_tab": true },
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'none'; img-src 'self' data: blob:; style-src 'self'; connect-src 'none'; base-uri 'none';"
+    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'none'; img-src 'self' data: blob: https://maker.taptap.cn; style-src 'self'; connect-src 'none'; base-uri 'none';"
   },
   "icons": {
     "16": "assets/icons/icon16.png",
@@ -28,13 +28,14 @@
   "content_scripts": [
     {
       "matches": ["https://maker.taptap.cn/*"],
-      "js": ["profile.js", "content.js"],
+      "js": ["profile.js", "card-profile.js", "content.js", "cards.js"],
+      "css": ["cards.css"],
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/tianyi.jpg"],
+      "resources": ["assets/tianyi.jpg", "assets/cards/tara.webp", "assets/cards/frog.png"],
       "matches": ["https://maker.taptap.cn/*"]
     }
   ]
