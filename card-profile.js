@@ -6,9 +6,14 @@
   const MESSAGE = 'maker-card-native-art';
   const TARA = chrome.runtime.getURL('assets/cards/tara.webp');
   const FROG = chrome.runtime.getURL('assets/cards/frog.png');
+  const GUYUEXUAN = chrome.runtime.getURL('assets/cards/gu-yuexuan.png');
+  const PRESETS = Object.freeze(['tara', 'frog', 'guyuexuan', 'custom']);
+  function imageFor(profile, nativeTara = TARA) {
+    return { tara: nativeTara, frog: FROG, guyuexuan: GUYUEXUAN, custom: profile.image }[profile.preset] || nativeTara;
+  }
   function normalize(value) {
     const image = MakerProfile.validAvatar(value?.image) ? value.image : '';
-    const preset = ['tara', 'frog', 'custom'].includes(value?.preset) ? value.preset : 'tara';
+    const preset = PRESETS.includes(value?.preset) ? value.preset : 'tara';
     return { preset: preset === 'custom' && !image ? 'tara' : preset, image };
   }
   function equal(a, b) { return a.preset === b.preset && a.image === b.image; }
@@ -27,12 +32,12 @@
   }
   async function load() { return normalize((await chrome.storage.local.get(KEY))[KEY]); }
   async function save(value) {
-    if (!['tara', 'frog', 'custom'].includes(value?.preset) ||
+    if (!PRESETS.includes(value?.preset) ||
         (value.image !== '' && !MakerProfile.validAvatar(value.image)) ||
         (value.preset === 'custom' && !value.image)) throw new Error('请先选择有效的卡面图片。');
     const next = normalize(value);
     await chrome.storage.local.set({ [KEY]: next });
     return next;
   }
-  globalThis.MakerCard = Object.freeze({ KEY, DEFAULTS, SELECTOR, MESSAGE, TARA, FROG, normalize, equal, siteImage, cssImage, load, save });
+  globalThis.MakerCard = Object.freeze({ KEY, DEFAULTS, SELECTOR, MESSAGE, TARA, FROG, GUYUEXUAN, PRESETS, imageFor, normalize, equal, siteImage, cssImage, load, save });
 })();

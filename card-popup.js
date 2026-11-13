@@ -6,14 +6,14 @@
   const dirty = () => !C.equal(draft, baseline);
   const message = (text, kind = '') => { $('card-status').textContent = text; $('card-status').dataset.kind = kind; };
   function render() {
-    $('card-preview-image').src = draft.preset === 'frog' ? C.FROG : draft.preset === 'custom' ? draft.image : tara;
+    $('card-preview-image').src = C.imageFor(draft, tara);
     $('card-tara-image').src = tara;
     $('card-custom-image').hidden = !draft.image;
     if (draft.image) $('card-custom-image').src = draft.image;
     else $('card-custom-image').removeAttribute('src');
     $('card-upload-plus').hidden = Boolean(draft.image);
     $('card-upload-label').textContent = draft.image ? '已上传' : '上传图片';
-    for (const preset of ['tara', 'frog', 'custom']) {
+    for (const preset of C.PRESETS) {
       $(`card-${preset}`).setAttribute('aria-pressed', String(draft.preset === preset));
       $(`card-${preset}`).disabled = !ready || saving;
     }
@@ -97,6 +97,7 @@
   }
   $('card-tara').addEventListener('click', () => select('tara'));
   $('card-frog').addEventListener('click', () => select('frog'));
+  $('card-guyuexuan').addEventListener('click', () => select('guyuexuan'));
   $('card-custom').addEventListener('click', () => { if (draft.image) select('custom'); else $('card-file').click(); });
   $('card-replace').addEventListener('click', () => $('card-file').click());
   $('card-refresh-source').addEventListener('click', requestSource);

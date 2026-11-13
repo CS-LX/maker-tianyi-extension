@@ -49,7 +49,7 @@
       const native = nativeSource(element);
       if (native) used.add(native);
       const tara = native && probe(native) !== 'failed' ? native : C.TARA;
-      let target = profile.preset === 'frog' ? C.FROG : profile.preset === 'custom' ? profile.image : tara;
+      let target = C.imageFor(profile, tara);
       used.add(target);
       if (target !== tara && probe(target) === 'failed') target = tara;
       if (target === native) {

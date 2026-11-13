@@ -60,7 +60,7 @@ test('ZIP is deterministic, loads from its root, and excludes development or pri
     'assets/icons/icon48.png', 'assets/icons/icon128.png',
     'profile.js', 'avatar.js', 'popup.html', 'popup.css', 'popup.js',
     'card-profile.js', 'card-popup.js', 'cards.js', 'cards.css',
-    'assets/cards/tara.webp', 'assets/cards/frog.png',
+    'assets/cards/tara.webp', 'assets/cards/frog.png', 'assets/cards/gu-yuexuan.png',
     'content.js', 'manifest.json', '安装说明.txt'
   ].sort());
   assert.equal(JSON.parse(strFromU8(files['manifest.json'])).version, version);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Maker · 天一一",
-  "version": "1.2.0.0",
+  "version": "1.2.1.0",
   "author": "Linxium (CS-LX)",
   "description": "自定义 TapTap Maker 聊天助手的昵称、头像和黑金卡图案。",
   "permissions": ["storage"],
@@ -35,7 +35,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/tianyi.jpg", "assets/cards/tara.webp", "assets/cards/frog.png"],
+      "resources": ["assets/tianyi.jpg", "assets/cards/tara.webp", "assets/cards/frog.png", "assets/cards/gu-yuexuan.png"],
       "matches": ["https://maker.taptap.cn/*"]
     }
   ]

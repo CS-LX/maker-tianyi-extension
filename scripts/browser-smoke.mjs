@@ -167,6 +167,26 @@ try {
   assert.equal(await decoration.evaluate(el => getComputedStyle(el).display), 'none');
   pass('frog preset updates all cards while preserving fade, text, and responsive visibility');
 
+  assert.equal(await popup.locator('.card-grid button').count(), 3);
+  await popup.locator('#card-guyuexuan').click();
+  await popup.locator('#card-preview-image').evaluate(image => image.decode());
+  await popup.locator('#card-save').click();
+  await popup.waitForFunction(() => document.querySelector('#card-status').dataset.kind === 'success');
+  for (const page of [maker, secondMaker]) await page.waitForFunction(() => getComputedStyle(document.querySelector('[data-decoration="tara"]')).backgroundImage.includes('/assets/cards/gu-yuexuan.png'));
+  await popup.reload(); await popup.locator('#card-tab').click();
+  await popup.waitForFunction(() => document.querySelector('#card-guyuexuan').getAttribute('aria-pressed') === 'true');
+  assert.equal(await popup.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  const presetPixels = await popup.locator('#card-preview-image').evaluate(async image => {
+    await image.decode(); const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+    const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+    return [ctx.getImageData(0, 0, 1, 1).data[3], ctx.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data[3]];
+  });
+  assert.deepEqual(presetPixels, [0, 255]);
+  await popup.screenshot({ path: path.join(root, 'test-results/guyuexuan-settings.png'), fullPage: true });
+  await maker.setViewportSize({ width: 1000, height: 700 });
+  await maker.locator('article').screenshot({ path: path.join(root, 'test-results/guyuexuan-card.png') });
+  pass('Gu Yuexuan preset preserves transparency, updates both tabs, and survives reopening');
+
   const upload = { name: 'tall.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="400"><rect x="50" y="20" width="100" height="380" fill="#e9cb7c"/></svg>') };
   await popup.locator('#card-file').setInputFiles(upload);
   await popup.waitForFunction(() => /图片已准备好/.test(document.querySelector('#card-status').textContent));
