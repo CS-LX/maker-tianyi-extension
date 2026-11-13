@@ -6,17 +6,22 @@ import { chromium } from 'playwright';
 import { root } from './project.mjs';
 
 const profileDir = await mkdtemp(path.join(os.tmpdir(), 'maker-tianyi-browser-'));
-const context = await chromium.launchPersistentContext(profileDir, {
-  channel: 'chromium', headless: true, viewport: { width: 368, height: 640 },
-  ignoreDefaultArgs: ['--disable-extensions'],
-  args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`]
-});
-context.setDefaultTimeout(15000);
+let context;
 let passed = 0;
 const pass = label => { passed++; console.log(`PASS ${label}`); };
 const errors = [];
-context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
 try {
+  context = await chromium.launchPersistentContext(profileDir, {
+    channel: 'chromium', headless: true, viewport: { width: 368, height: 640 },
+    ignoreDefaultArgs: ['--disable-extensions'],
+    args: ['--enable-unsafe-extension-debugging']
+  });
+  context.setDefaultTimeout(15000);
+  context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
+  const extensionSession = await context.browser().newBrowserCDPSession();
+  const { id: extensionId } = await extensionSession.send('Extensions.loadUnpacked', { path: root });
+  assert.match(extensionId, /^[a-p]{32}$/);
+  console.log(`Loaded unpacked extension ${extensionId} in ${context.browser().version()}`);
   const jpg = await readFile(path.join(root, 'assets/tianyi.jpg'));
   const fixture = '<!doctype html><html><body><div class="flex items-center"><div class="relative flex items-center"><img alt="Bot Avatar" src="/assets/tap-test.webp"><svg id="ring"></svg></div><div class="chat-thinking-shimmer">嗒啦啦正在思考...</div></div><p id="prose">正文提到嗒啦啦</p></body></html>';
   await context.route('https://maker.taptap.cn/**', route => {
@@ -24,21 +29,8 @@ try {
     return route.fulfill({ contentType: 'text/html', body: fixture });
   });
   const maker = await context.newPage();
-  const cdp = await context.newCDPSession(maker);
-  const worlds = new Map();
-  cdp.on('Runtime.executionContextCreated', ({ context }) => worlds.set(context.id, context));
-  cdp.on('Runtime.executionContextDestroyed', ({ executionContextId }) => worlds.delete(executionContextId));
-  await cdp.send('Runtime.enable');
   await maker.goto('https://maker.taptap.cn/app/browser-test');
   await maker.waitForFunction(() => document.querySelector('.chat-thinking-shimmer').textContent === '天一一正在思考...');
-  let extensionId;
-  for (const world of worlds.values()) {
-    try {
-      const { result } = await cdp.send('Runtime.evaluate', { expression: 'globalThis.chrome?.runtime?.id', contextId: world.id, returnByValue: true });
-      if (typeof result.value === 'string') extensionId = result.value;
-    } catch { /* A navigation may have discarded a main-world context. */ }
-  }
-  assert.match(extensionId ?? '', /^[a-p]{32}$/);
   const popupUrl = `chrome-extension://${extensionId}/popup.html`;
   const popup = await context.newPage();
   await popup.goto(popupUrl);
@@ -119,8 +111,18 @@ try {
   await popup.screenshot({ path: path.join(root, 'test-results/settings.png'), fullPage: true });
   assert.deepEqual(errors, []);
   console.log(`Browser smoke: ${passed} checks passed.`);
+} catch (error) {
+  console.error('Browser errors:', errors);
+  if (context) {
+    await mkdir(path.join(root, 'test-results'), { recursive: true });
+    for (const [index, page] of context.pages().entries()) {
+      console.error(`Page ${index}: ${page.url()}`);
+      await page.screenshot({ path: path.join(root, `test-results/failure-${index}.png`), fullPage: true }).catch(() => {});
+    }
+  }
+  throw error;
 } finally {
-  await context.close();
+  await context?.close();
   // Only the freshly-created, isolated test profile is removed; no user's browser is involved.
   const resolved = path.resolve(profileDir);
   if (path.dirname(resolved) === path.resolve(os.tmpdir()) && path.basename(resolved).startsWith('maker-tianyi-browser-')) {
