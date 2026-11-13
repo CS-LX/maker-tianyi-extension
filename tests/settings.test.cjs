@@ -120,3 +120,16 @@ test('external changes refresh a clean popup but do not silently overwrite a dir
   s.$('reload').click(); await tick();
   assert.equal(s.$('nickname').value, '外部更新');
 });
+
+test('a storage change during popup initialization is reread instead of showing stale settings', async t => {
+  const s = setup(t);
+  const normalGet = s.w.chrome.storage.local.get;
+  let complete;
+  s.w.chrome.storage.local.get = () => new Promise(resolve => { complete = resolve; });
+  s.run();
+  s.state.external({ nickname: '最新保存', avatar: '' });
+  s.w.chrome.storage.local.get = normalGet;
+  complete({ makerIdentity: { nickname: '过期读取', avatar: '' } });
+  await tick();
+  assert.equal(s.$('nickname').value, '最新保存');
+});

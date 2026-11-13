@@ -23,10 +23,10 @@ try {
   assert.match(extensionId, /^[a-p]{32}$/);
   console.log(`Loaded unpacked extension ${extensionId} in ${context.browser().version()}`);
   const jpg = await readFile(path.join(root, 'assets/tianyi.jpg'));
-  const fixture = '<!doctype html><html><body><div class="flex items-center"><div class="relative flex items-center"><img alt="Bot Avatar" src="/assets/tap-test.webp"><svg id="ring"></svg></div><div class="chat-thinking-shimmer">嗒啦啦正在思考...</div></div><p id="prose">正文提到嗒啦啦</p></body></html>';
+  const fixture = '<!doctype html><html><head><meta charset="utf-8"></head><body><div class="flex items-center"><div class="relative flex items-center"><img alt="Bot Avatar" src="/assets/tap-test.webp"><svg id="ring"></svg></div><div class="chat-thinking-shimmer">嗒啦啦正在思考...</div></div><p id="prose">正文提到嗒啦啦</p></body></html>';
   await context.route('https://maker.taptap.cn/**', route => {
     if (new URL(route.request().url()).pathname.startsWith('/assets/')) return route.fulfill({ contentType: 'image/jpeg', body: jpg });
-    return route.fulfill({ contentType: 'text/html', body: fixture });
+    return route.fulfill({ contentType: 'text/html; charset=utf-8', body: fixture });
   });
   const maker = await context.newPage();
   await maker.goto('https://maker.taptap.cn/app/browser-test');
@@ -117,6 +117,7 @@ try {
     await mkdir(path.join(root, 'test-results'), { recursive: true });
     for (const [index, page] of context.pages().entries()) {
       console.error(`Page ${index}: ${page.url()}`);
+      console.error(await page.locator('body').textContent().catch(() => 'No body'));
       await page.screenshot({ path: path.join(root, `test-results/failure-${index}.png`), fullPage: true }).catch(() => {});
     }
   }
