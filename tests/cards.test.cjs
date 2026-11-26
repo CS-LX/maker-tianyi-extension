@@ -105,29 +105,31 @@ test('card storage races prefer the latest event and malformed images fall back'
   assert.equal(s.$('[data-decoration]').hasAttribute('data-maker-card-art'), false, 'undecodable custom data restores the native preset');
 });
 
-test('Gu Yuexuan preset loads from saved settings, updates live, and falls back if unavailable', async t => {
-  const s = setup(t, { stored: { preset: 'guyuexuan', image: png } }); s.run(); await tick();
-  assert.match(s.$('[data-decoration]').style.getPropertyValue('--maker-card-background'), /gu-yuexuan.png/);
-  assert.equal(s.w.MakerCard.normalize({ preset: 'guyuexuan', image: png }).image, png);
+for (const [preset, file] of [['guyuexuan', 'gu-yuexuan.png'], ['mouse', 'mouse.png']]) test(`${preset} preset loads from saved settings, updates live, and falls back if unavailable`, async t => {
+  const s = setup(t, { stored: { preset, image: png } }); s.run(); await tick();
+  assert.ok(s.$('[data-decoration]').style.getPropertyValue('--maker-card-background').includes(file));
+  assert.equal(s.w.MakerCard.normalize({ preset, image: png }).image, png);
   s.state.external({ preset: 'frog', image: png }); await tick();
   assert.match(s.$('[data-decoration]').style.getPropertyValue('--maker-card-background'), /frog.png/);
-  s.state.external({ preset: 'guyuexuan', image: png }); await tick();
-  assert.match(s.$('[data-decoration]').style.getPropertyValue('--maker-card-background'), /gu-yuexuan.png/);
-  const broken = setup(t, { stored: { preset: 'guyuexuan', image: '' }, failed: ['https://extension.test/assets/cards/gu-yuexuan.png'] });
+  s.state.external({ preset, image: png }); await tick();
+  assert.ok(s.$('[data-decoration]').style.getPropertyValue('--maker-card-background').includes(file));
+  const broken = setup(t, { stored: { preset, image: '' }, failed: [`https://extension.test/assets/cards/${file}`] });
   broken.run(); await tick();
   assert.equal(broken.$('[data-decoration]').hasAttribute('data-maker-card-art'), false);
 });
 
-test('three built-in tiles and the separate upload choice preserve existing uploaded art', async t => {
+test('four built-in tiles and the separate upload choice preserve existing uploaded art', async t => {
   const s = setup(t, { popup: true, stored: { preset: 'custom', image: png } }); s.run(); await tick();
-  assert.deepEqual([...s.w.document.querySelectorAll('.card-grid button')].map(el => el.id), ['card-tara', 'card-frog', 'card-guyuexuan']);
-  s.$('#card-guyuexuan').click();
-  assert.match(s.$('#card-preview-image').src, /gu-yuexuan.png/);
-  s.submit(); await tick();
-  assert.equal(s.state.stored.preset, 'guyuexuan');
-  assert.equal(s.state.stored.image, png);
-  s.$('#card-reload').click(); await tick();
-  assert.equal(s.$('#card-guyuexuan').getAttribute('aria-pressed'), 'true');
+  assert.deepEqual([...s.w.document.querySelectorAll('.card-grid button')].map(el => el.id), ['card-tara', 'card-frog', 'card-guyuexuan', 'card-mouse']);
+  for (const [preset, file] of [['guyuexuan', 'gu-yuexuan.png'], ['mouse', 'mouse.png']]) {
+    s.$(`#card-${preset}`).click();
+    assert.ok(s.$('#card-preview-image').src.endsWith(file));
+    s.submit(); await tick();
+    assert.equal(s.state.stored.preset, preset);
+    assert.equal(s.state.stored.image, png);
+    s.$('#card-reload').click(); await tick();
+    assert.equal(s.$(`#card-${preset}`).getAttribute('aria-pressed'), 'true');
+  }
   s.$('#card-custom').click();
   assert.equal(s.$('#card-preview-image').src, png);
 });

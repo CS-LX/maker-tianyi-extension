@@ -167,28 +167,46 @@ try {
   assert.equal(await decoration.evaluate(el => getComputedStyle(el).display), 'none');
   pass('frog preset updates all cards while preserving fade, text, and responsive visibility');
 
-  assert.equal(await popup.locator('.card-grid button').count(), 3);
-  await popup.locator('#card-guyuexuan').click();
-  await popup.locator('#card-preview-image').evaluate(image => image.decode());
-  await popup.locator('#card-save').click();
-  await popup.waitForFunction(() => document.querySelector('#card-status').dataset.kind === 'success');
-  for (const page of [maker, secondMaker]) await page.waitForFunction(() => getComputedStyle(document.querySelector('[data-decoration="tara"]')).backgroundImage.includes('/assets/cards/gu-yuexuan.png'));
-  await popup.reload(); await popup.locator('#card-tab').click();
-  await popup.waitForFunction(() => document.querySelector('#card-guyuexuan').getAttribute('aria-pressed') === 'true');
-  assert.equal(await popup.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  const presetPixels = await popup.locator('#card-preview-image').evaluate(async image => {
-    await image.decode(); const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
-    const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
-    return [ctx.getImageData(0, 0, 1, 1).data[3], ctx.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data[3]];
-  });
-  assert.equal(presetPixels[0], 0, 'background remains transparent');
-  // Generated artwork can retain subtle alpha in its fill; require visible artwork,
-  // not an arbitrary fully-opaque value for one sampled pixel.
-  assert.ok(presetPixels[1] >= 240, 'character remains visibly opaque');
-  await popup.screenshot({ path: path.join(root, 'test-results/guyuexuan-settings.png'), fullPage: true });
-  await maker.setViewportSize({ width: 1000, height: 700 });
-  await maker.locator('article').screenshot({ path: path.join(root, 'test-results/guyuexuan-card.png') });
-  pass('Gu Yuexuan preset preserves transparency, updates both tabs, and survives reopening');
+  const tiles = await popup.locator('.card-grid button').evaluateAll(elements => elements.map(el => {
+    const { x, y, width } = el.getBoundingClientRect(); return { x, y, width };
+  }));
+  assert.equal(tiles.length, 4);
+  assert.equal(tiles[0].y, tiles[1].y);
+  assert.equal(tiles[2].y, tiles[3].y);
+  assert.ok(tiles[2].y > tiles[0].y && tiles[0].width >= 140, 'four large tiles form two rows');
+  assert.equal(tiles[0].x, tiles[2].x);
+  assert.equal(tiles[1].x, tiles[3].x);
+  for (const [preset, file] of [['guyuexuan', 'gu-yuexuan.png'], ['mouse', 'mouse.png']]) {
+    await popup.locator(`#card-${preset}`).click();
+    await popup.locator('#card-preview-image').evaluate(image => image.decode());
+    await popup.locator('#card-save').click();
+    await popup.waitForFunction(() => document.querySelector('#card-status').dataset.kind === 'success');
+    for (const page of [maker, secondMaker]) {
+      await page.waitForFunction(file => getComputedStyle(document.querySelector('[data-decoration="tara"]')).backgroundImage.includes(`/assets/cards/${file}`), file);
+      // A correct CSS URL alone does not prove the web page can load the asset.
+      // Decode in the page world to catch missing web_accessible_resources entries.
+      await page.evaluate(async () => {
+        const css = getComputedStyle(document.querySelector('[data-decoration="tara"]')).backgroundImage;
+        const image = new Image(); image.src = css.slice(5, -2); await image.decode();
+      });
+    }
+    await popup.reload(); await popup.locator('#card-tab').click();
+    await popup.waitForFunction(preset => document.querySelector(`#card-${preset}`).getAttribute('aria-pressed') === 'true', preset);
+    assert.equal(await popup.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    const presetPixels = await popup.locator('#card-preview-image').evaluate(async image => {
+      await image.decode(); const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+      return [ctx.getImageData(0, 0, 1, 1).data[3], ctx.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data[3]];
+    });
+    assert.equal(presetPixels[0], 0, 'background remains transparent');
+    // Generated artwork can retain subtle alpha in its fill; require visible artwork,
+    // not an arbitrary fully-opaque value for one sampled pixel.
+    assert.ok(presetPixels[1] >= 240, 'character remains visibly opaque');
+    await popup.screenshot({ path: path.join(root, `test-results/${preset}-settings.png`), fullPage: true });
+    await maker.setViewportSize({ width: 1000, height: 700 });
+    await maker.locator('article').screenshot({ path: path.join(root, `test-results/${preset}-card.png`) });
+    pass(`${preset} preset preserves transparency, loads in both tabs, and survives reopening`);
+  }
 
   const upload = { name: 'tall.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="400"><rect x="50" y="20" width="100" height="380" fill="#e9cb7c"/></svg>') };
   await popup.locator('#card-file').setInputFiles(upload);

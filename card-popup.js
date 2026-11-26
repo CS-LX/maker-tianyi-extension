@@ -98,6 +98,7 @@
   $('card-tara').addEventListener('click', () => select('tara'));
   $('card-frog').addEventListener('click', () => select('frog'));
   $('card-guyuexuan').addEventListener('click', () => select('guyuexuan'));
+  $('card-mouse').addEventListener('click', () => select('mouse'));
   $('card-custom').addEventListener('click', () => { if (draft.image) select('custom'); else $('card-file').click(); });
   $('card-replace').addEventListener('click', () => $('card-file').click());
   $('card-refresh-source').addEventListener('click', requestSource);

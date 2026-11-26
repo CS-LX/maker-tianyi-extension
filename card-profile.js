@@ -7,9 +7,10 @@
   const TARA = chrome.runtime.getURL('assets/cards/tara.webp');
   const FROG = chrome.runtime.getURL('assets/cards/frog.png');
   const GUYUEXUAN = chrome.runtime.getURL('assets/cards/gu-yuexuan.png');
-  const PRESETS = Object.freeze(['tara', 'frog', 'guyuexuan', 'custom']);
+  const MOUSE = chrome.runtime.getURL('assets/cards/mouse.png');
+  const PRESETS = Object.freeze(['tara', 'frog', 'guyuexuan', 'mouse', 'custom']);
   function imageFor(profile, nativeTara = TARA) {
-    return { tara: nativeTara, frog: FROG, guyuexuan: GUYUEXUAN, custom: profile.image }[profile.preset] || nativeTara;
+    return { tara: nativeTara, frog: FROG, guyuexuan: GUYUEXUAN, mouse: MOUSE, custom: profile.image }[profile.preset] || nativeTara;
   }
   function normalize(value) {
     const image = MakerProfile.validAvatar(value?.image) ? value.image : '';
@@ -39,5 +40,5 @@
     await chrome.storage.local.set({ [KEY]: next });
     return next;
   }
-  globalThis.MakerCard = Object.freeze({ KEY, DEFAULTS, SELECTOR, MESSAGE, TARA, FROG, GUYUEXUAN, PRESETS, imageFor, normalize, equal, siteImage, cssImage, load, save });
+  globalThis.MakerCard = Object.freeze({ KEY, DEFAULTS, SELECTOR, MESSAGE, TARA, FROG, GUYUEXUAN, MOUSE, PRESETS, imageFor, normalize, equal, siteImage, cssImage, load, save });
 })();
